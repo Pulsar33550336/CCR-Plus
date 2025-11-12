@@ -1,0 +1,58 @@
+name: Build Windows 32bit Multi-Qt
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-windows-multi:
+    name: Build ${{ matrix.qt-version }} ${{ matrix.arch }}
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - qt-version: '6.5.0'
+            arch: 'win32_msvc2019'
+          - qt-version: '5.15.2'
+            arch: 'win32_msvc2019'
+          - qt-version: '6.5.0'
+            arch: 'win32_mingw'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Qt
+      uses: jurplel/setup-qt-action@v3
+      with:
+        version: ${{ matrix.qt-version }}
+        arch: ${{ matrix.arch }}
+        cache: true
+        setup-python: false
+
+    - name: Create build directory
+      run: mkdir build
+
+    - name: Configure with qmake
+      working-directory: ./build
+      run: qmake ..
+
+    - name: Build project
+      working-directory: ./build
+      run: |
+        if "${{ matrix.arch }}" == "win32_mingw" (
+          mingw32-make
+        ) else (
+          nmake
+        )
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: CCR-Plus-${{ matrix.qt-version }}-${{ matrix.arch }}
+        path: |
+          build/*.exe
+          build/*.dll
+        retention-days: 30

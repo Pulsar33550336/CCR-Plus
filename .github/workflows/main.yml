@@ -1,4 +1,4 @@
-name: Build Windows 32bit Multi-Qt
+name: Build Windows Multi-Arch
 
 on:
   push:
@@ -7,52 +7,54 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build-windows-multi:
-    name: Build ${{ matrix.qt-version }} ${{ matrix.arch }}
+  build-windows:
+    name: Build ${{ matrix.arch }}
     runs-on: windows-latest
     strategy:
       matrix:
-        include:
-          - qt-version: '6.5.0'
-            arch: 'win32_msvc2019'
-          - qt-version: '5.15.2'
-            arch: 'win32_msvc2019'
-          - qt-version: '6.5.0'
-            arch: 'win32_mingw'
+        arch: [win32_msvc2019, win32_mingw, win64_msvc2019_64]
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Qt
-      uses: jurplel/setup-qt-action@v3
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
       with:
-        version: ${{ matrix.qt-version }}
+        version: '6.5.0'
+        host: 'windows'
+        target: 'desktop'
         arch: ${{ matrix.arch }}
         cache: true
-        setup-python: false
+
+    - name: Setup MSBuild (for MSVC builds)
+      if: contains(matrix.arch, 'msvc')
+      uses: microsoft/setup-msbuild@v1
 
     - name: Create build directory
       run: mkdir build
 
     - name: Configure with qmake
       working-directory: ./build
-      run: qmake ..
+      run: |
+        if ("${{ matrix.arch }}" -like "*mingw*") {
+          qmake -spec win32-g++ ..
+        } else {
+          qmake -spec win32-msvc ..
+        }
 
     - name: Build project
       working-directory: ./build
       run: |
-        if "${{ matrix.arch }}" == "win32_mingw" (
+        if ("${{ matrix.arch }}" -like "*mingw*") {
           mingw32-make
-        ) else (
+        } else {
           nmake
-        )
+        }
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: CCR-Plus-${{ matrix.qt-version }}-${{ matrix.arch }}
-        path: |
-          build/*.exe
-          build/*.dll
+        name: CCR-Plus-${{ matrix.arch }}
+        path: build/
         retention-days: 30
